@@ -43,7 +43,31 @@ class DatabaseConnect extends AbstractStepAction
 
         $localConfigurationPathValuePairs = [];
 
-        if (isset($postValues['username'])) {
+        if (isset($postValues['driver']) && $postValues['driver'] !== '') {
+            $value = $postValues['driver'];
+
+            $isSupported = false;
+            foreach($this->getSupportedDrivers() as $supportedDriver) {
+                if ($supportedDriver['extension'] === $value) {
+                    $isSupported = true;
+                    break;
+                }
+            }
+            if ($isSupported) {
+                $localConfigurationPathValuePairs['DB/Connections/Default/driver'] = $value;
+            } else {
+                /** @var $errorStatus \TYPO3\CMS\Install\Status\ErrorStatus */
+                $errorStatus = GeneralUtility::makeInstance(\TYPO3\CMS\Install\Status\ErrorStatus::class);
+                $errorStatus->setTitle('Database driver not valid');
+                $errorStatus->setMessage('The driver should be supported by TYPO3 and it\'s extension enabled.');
+                $result[] = $errorStatus;
+            }
+            $driver = value;
+        } else {
+            $driver = $this->getDefaultDriver();
+        }
+
+        if (isset($postValues['password']) && $postValues['password'] !== '') {
             $value = $postValues['username'];
             if (strlen($value) <= 50) {
                 $localConfigurationPathValuePairs['DB/Connections/Default/user'] = $value;
@@ -54,6 +78,8 @@ class DatabaseConnect extends AbstractStepAction
                 $errorStatus->setMessage('Given username must be shorter than fifty characters.');
                 $result[] = $errorStatus;
             }
+        } else {
+            $configurationManager->removeLocalConfigurationKeysByPath(['DB/Connections/Default/password']);
         }
 
         if (isset($postValues['password'])) {
@@ -69,7 +95,7 @@ class DatabaseConnect extends AbstractStepAction
             }
         }
 
-        if (isset($postValues['host'])) {
+        if (isset($postValues['host']) && $postValues['host'] !== '') {
             $value = $postValues['host'];
             if (preg_match('/^[a-zA-Z0-9_\\.-]+(:.+)?$/', $value) && strlen($value) <= 255) {
                 $localConfigurationPathValuePairs['DB/Connections/Default/host'] = $value;
@@ -80,9 +106,11 @@ class DatabaseConnect extends AbstractStepAction
                 $errorStatus->setMessage('Given host is not alphanumeric (a-z, A-Z, 0-9 or _-.:) or longer than 255 characters.');
                 $result[] = $errorStatus;
             }
+        } else {
+            $configurationManager->removeLocalConfigurationKeysByPath(['DB/Connections/Default/host']);
         }
 
-        if (isset($postValues['port']) && $postValues['host'] !== 'localhost') {
+        if (isset($postValues['port']) && $postValues['port'] !== '') {
             $value = $postValues['port'];
             if (preg_match('/^[0-9]+(:.+)?$/', $value) && $value > 0 && $value <= 65535) {
                 $localConfigurationPathValuePairs['DB/Connections/Default/port'] = (int)$value;
@@ -93,6 +121,8 @@ class DatabaseConnect extends AbstractStepAction
                 $errorStatus->setMessage('Given port is not numeric or within range 1 to 65535.');
                 $result[] = $errorStatus;
             }
+        } else {
+            $configurationManager->removeLocalConfigurationKeysByPath(['DB/Connections/Default/port']);
         }
 
         if (isset($postValues['socket']) && $postValues['socket'] !== '') {
@@ -105,9 +135,11 @@ class DatabaseConnect extends AbstractStepAction
                 $errorStatus->setMessage('Given socket location does not exist on server.');
                 $result[] = $errorStatus;
             }
+        } else {
+            $configurationManager->removeLocalConfigurationKeysByPath(['DB/Connections/Default/socket']);
         }
 
-        if (isset($postValues['database'])) {
+        if (isset($postValues['database']) && $postValues['database'] !== '') {
             $value = $postValues['database'];
             if (strlen($value) <= 50) {
                 $localConfigurationPathValuePairs['DB/Connections/Default/dbname'] = $value;
@@ -118,6 +150,71 @@ class DatabaseConnect extends AbstractStepAction
                 $errorStatus->setMessage('Given database name must be shorter than fifty characters.');
                 $result[] = $errorStatus;
             }
+        } else {
+            $configurationManager->removeLocalConfigurationKeysByPath(['DB/Connections/Default/dbname']);
+        }
+
+        // Oracle : Database resident connection pooling
+        if (isset($postValues['pooled'])) {
+            if ($postValues['pooled'] === 'on') {
+                $localConfigurationPathValuePairs['DB/Connections/Default/pooled'] = true;
+            } else {
+                $localConfigurationPathValuePairs['DB/Connections/Default/pooled'] = false;
+            }
+        } else {
+            $configurationManager->removeLocalConfigurationKeysByPath(['DB/Connections/Default/pooled']);
+        }
+
+        // Oracle : check if we must set Doctrine service configuration
+        if (isset($postValues['oracletype']) && $postValues['oracletype'] !== '') {
+            $value = $postValues['oracletype'];
+            if ($value == "servicename") {
+                $localConfigurationPathValuePairs['DB/Connections/Default/service'] = true;
+            } else {
+                $localConfigurationPathValuePairs['DB/Connections/Default/service'] = false;
+            }
+        } else {
+            $configurationManager->removeLocalConfigurationKeysByPath(['DB/Connections/Default/service']);
+        }
+
+        // Oracle : Net service name from tnsnames.ora
+        // https://docs.oracle.com/cd/B28359_01/network.111/b28317/tnsnames.htm#NETRF259
+        if (isset($postValues['netservicename']) && $postValues['netservicename'] !== '') {
+            $value = $postValues['netservicename'];
+            // https://docs.oracle.com/cd/E11882_01/network.112/e10835/syntax.htm#NETRF175
+            $localConfigurationPathValuePairs['DB/Connections/Default/dbname'] = $value;
+        } else {
+            $configurationManager->removeLocalConfigurationKeysByPath(['DB/Connections/Default/dbname']);
+        }
+
+        // Oracle : SID or Service Name
+        // https://docs.oracle.com/database/121/NETAG/concepts.htm#NETAG253
+        if (isset($postValues['servicename']) && $postValues['servicename'] !== '') {
+            $value = $postValues['servicename'];
+            // https://docs.oracle.com/cd/E11882_01/network.112/e10835/syntax.htm#NETRF175
+            $localConfigurationPathValuePairs['DB/Connections/Default/servicename'] = $value;
+        } else {
+            $configurationManager->removeLocalConfigurationKeysByPath(['DB/Connections/Default/servicename']);
+        }
+
+        // Oracle : Easy Connect
+        // https://docs.oracle.com/database/121/NETAG/naming.htm#NETAG255
+        if (isset($postValues['connectstring']) && $postValues['connectstring'] !== '') {
+            $value = $postValues['connectstring'];
+            $localConfigurationPathValuePairs['DB/Connections/Default/connectstring'] = $value;
+        } else {
+            $configurationManager->removeLocalConfigurationKeysByPath(['DB/Connections/Default/connectstring']);
+        }
+
+        // Oracle : Persistent connections
+        if (isset($postValues['persistent'])) {
+            if ($postValues['persistent'] === 'on') {
+                $localConfigurationPathValuePairs['DB/Connections/Default/persistent'] = true;
+            } else {
+                $localConfigurationPathValuePairs['DB/Connections/Default/persistent'] = false;
+            }
+        } else {
+            $configurationManager->removeLocalConfigurationKeysByPath(['DB/Connections/Default/persistent']);
         }
 
         if (!empty($localConfigurationPathValuePairs)) {
@@ -129,11 +226,13 @@ class DatabaseConnect extends AbstractStepAction
             \TYPO3\CMS\Core\Core\Bootstrap::getInstance()
                 ->populateLocalConfiguration()
                 ->disableCoreCache();
-            if (!$this->isConnectSuccessful()) {
+            try {
+                $this->tryConnect();
+            } catch (DBALException $e) {
                 /** @var $errorStatus \TYPO3\CMS\Install\Status\ErrorStatus */
                 $errorStatus = GeneralUtility::makeInstance(\TYPO3\CMS\Install\Status\ErrorStatus::class);
                 $errorStatus->setTitle('Database connect not successful');
-                $errorStatus->setMessage('Connecting to the database with given settings failed. Please check.');
+                $errorStatus->setMessage('Connecting to the database with given settings failed: ' . $e->getMessage());
                 $result[] = $errorStatus;
             }
         }
@@ -149,11 +248,12 @@ class DatabaseConnect extends AbstractStepAction
      */
     public function needsExecution()
     {
-        if ($this->isConnectSuccessful() && $this->isConfigurationComplete()) {
+        // If we are able to connect, the configuration is complete
+        if ($this->isConnectSuccessful()) {
             return false;
         }
-        if (!$this->isHostConfigured()) {
-            $this->useDefaultValuesForNotConfiguredOptions();
+        if ($this->getConfiguredDriver === 'mysqli' && !$this->isHostConfigured()) {
+            $this->useDefaultMySQLValuesForNotConfiguredOptions();
             throw new \TYPO3\CMS\Install\Controller\Exception\RedirectException(
                 'Wrote default settings to LocalConfiguration.php, redirect needed',
                 1377611168
@@ -169,18 +269,64 @@ class DatabaseConnect extends AbstractStepAction
      */
     protected function executeAction()
     {
+        $driver = $this->getConfiguredDriver();
+
         $this->view
+            ->assign('driver', $driver)
+            ->assign('drivers', $this->getSupportedDrivers())
             ->assign('username', $this->getConfiguredUsername())
             ->assign('password', $this->getConfiguredPassword())
             ->assign('host', $this->getConfiguredHost())
             ->assign('port', $this->getConfiguredOrDefaultPort())
-            ->assign('database', $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['dbname'] ?: '')
-            ->assign('socket', $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['unix_socket'] ?: '')
-            ->assign('renderConnectDetailsUsername', true)
-            ->assign('renderConnectDetailsPassword', true)
-            ->assign('renderConnectDetailsHost', true)
-            ->assign('renderConnectDetailsPort', true)
-            ->assign('renderConnectDetailsSocket', true);
+            ->assign('database', $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['dbname'] ?: '');
+
+        $this->view
+            ->assign('renderConnectDetailsDriver', true);
+
+        foreach ($this->getSupportedDrivers() as $driverName => $driverInfo) {
+            if ($driverName == 'mysql') {
+                $this->view
+                    ->assign('renderConnectDetailsUsername', true)
+                    ->assign('renderConnectDetailsPassword', true)
+                    ->assign('renderConnectDetailsSelectMySQLType', true)
+                    ->assign('renderConnectDetailsHost', true)
+                    ->assign('renderConnectDetailsPort', true)
+                    ->assign('renderConnectDetailsSocket', true)
+                    ->assign('socket', $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['unix_socket'] ?: '');
+            } else if ($driverName == 'oracle') {
+                $connectString = $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['connectstring'] ?: '';
+                $this->view
+                    ->assign('renderConnectDetailsUsername', true)
+                    ->assign('renderConnectDetailsPassword', true)
+                    ->assign('renderConnectDetailsPooled', true)
+                    ->assign('renderConnectDetailsSelectOracleType', true)
+                    ->assign('renderConnectDetailsNetServiceName', true)
+                    ->assign('renderConnectDetailsHost', true)
+                    ->assign('renderConnectDetailsPort', true)
+                    ->assign('renderConnectDetailsServiceName', true)
+                    ->assign('renderConnectDetailsEasyConnectString', true)
+                    ->assign('renderConnectDetailsPersistent', true)
+                    ->assign('pooled', $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['pooled'] ?: false)
+                    ->assign('netservicename', $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['dbname'] ?: '')
+                    ->assign('servicename', $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['servicename'] ?: '')
+                    ->assign('connectstring', $connectString)
+                    ->assign('persistent', $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['persistent'] ?: false);
+
+                $service = $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['service'] ?: false;
+                $serviceName = $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['servicename'] ?: '';
+                if ($service) {
+                    $this->view->assign('oracletype', 'servicename');
+                } else if ($serviceName !== '') {
+                    $this->view->assign('oracletype', 'sid');
+                } else if ($connectString !== '') {
+                    $this->view->assign('oracletype', 'easyconnect');
+                } else {
+                    $this->view->assign('oracletype', 'netservicename');
+                }
+
+                // @todo: instancename (string): Optional parameter, complete whether to add the INSTANCE_NAME parameter in the connection. It is generally used to connect to an Oracle RAC server to select the name of a particular instance.
+            }
+        }
 
         $this->assignSteps();
 
@@ -203,6 +349,50 @@ class DatabaseConnect extends AbstractStepAction
         return $port;
     }
 
+     /**
+     * Returns a list of  supported database drivers, with a
+     * user-friendly name and any PHP module dependency.
+     *
+     * @return array
+     */
+    protected function getSupportedDrivers()
+    {
+        $supportedDrivers = [
+            'mysql' => [
+                'label' => 'MySQL/MariaDB (mysqli)',
+                'extension' => 'mysqli'
+            ],
+            'oracle' => [
+                'label' => 'Oracle (oci8)',
+                'extension' => 'oci8'
+            ],
+        ];
+
+        if (!extension_loaded('mysqli')) {
+            unset($supportedDrivers['mysql']);
+        }
+        if (!extension_loaded('oci8')) {
+            unset($supportedDrivers['oracle']);
+        }
+        return $supportedDrivers;
+    }
+
+    /**
+     * Render driver
+     *
+     * @return string
+     */
+    protected function getConfiguredOrDefaultDriver()
+    {
+        $configuredDriver = $this->getConfiguredDriver();
+        if (!$configuredDriver) {
+            $driver = 'mysqli';
+        } else {
+            $driver = $configuredDriver;
+        }
+        return $driver;
+    }
+
     /**
      * Test connection with given credentials
      *
@@ -211,52 +401,75 @@ class DatabaseConnect extends AbstractStepAction
     protected function isConnectSuccessful()
     {
         try {
-            GeneralUtility::makeInstance(ConnectionPool::class)->getConnectionByName('Default')->ping();
+            $this->tryConnect();
         } catch (DBALException $e) {
             return false;
         }
         return true;
     }
 
-    /**
-     * Check LocalConfiguration.php for required database settings:
-     * - 'host' is mandatory and must not be empty
-     * - 'port' OR 'socket' is mandatory, but may be empty
-     *
-     * @return bool TRUE if host is set
-     */
-    protected function isHostConfigured()
+    protected function tryConnect()
     {
-        $hostConfigured = true;
-        if (empty($GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['host'])) {
-            $hostConfigured = false;
-        }
-        if (!isset($GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['port'])
-            && !isset($GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['unix_socket'])
-        ) {
-            $hostConfigured = false;
-        }
-        return $hostConfigured;
+        GeneralUtility::makeInstance(ConnectionPool::class)->getConnectionByName('Default')->ping();
     }
 
     /**
      * Check LocalConfiguration.php for required database settings:
-     * - 'host' is mandatory and must not be empty
-     * - 'port' OR 'socket' is mandatory, but may be empty
-     * - 'username' and 'password' are mandatory, but may be empty
      *
-     * @return bool TRUE if required settings are present
-     */
-    protected function isConfigurationComplete()
+     * For MySQL:
+     * - 'host' is mandatory and must not be empty
+     * - 'port' OR 'socket' is mandatory, but may be empty (Doctrine defaults to 3306)
+     *
+     * For Oracle, nothing is really mandatory (Doctrine will defaut to dbname as SID), but
+     * since the database name is not configured before testing the connection, we must either
+     * have:
+     * - SID (servicename) is mandatory if using SID (service is false)
+     * - 'host', 'port' and 'servicename' is mandatory if using Service Name (service is true)
+     * OR
+     * - 'connectstring' is used to configure everything with an Easy Connect syntax
+      *
+      * @return bool TRUE if host is set
+      */
+    protected function isHostConfigured()
     {
-        $configurationComplete = $this->isHostConfigured();
-        if (!isset($GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['user'])) {
-            $configurationComplete = false;
+        if (!isset($GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['driver'])) {
+            return false;
         }
-        if (!isset($GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['password'])) {
-            $configurationComplete = false;
+
+        $hostConfigured = true;
+        $driver = $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['driver'];
+        if ($driver == 'mysqli') {
+            if (empty($GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['host'])) {
+                $hostConfigured = false;
+            }
+            if (!isset($GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['port'])
+                && !isset($GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['unix_socket'])
+            ) {
+                $hostConfigured = false;
+            }
+        } else if ($driver == 'oci8') {
+            // Service name
+            if (isset($GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['service'])
+                && $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['service'] === true
+            ) {
+                if (empty($GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['host'])
+                    || empty($GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['port'])
+                    || empty($GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['servicename'])
+                ) {
+                    $hostConfigured = false;
+                }
+            }
+            // Easy Connect
+            } else if (isset($GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['connectstring'])) {
+                if ($GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['connectstring'] === '') {
+                    $hostConfigured = false;
+            // SID
+            } else if (!isset($GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['servicename'])) {
+                $hostConfigured = false;
+            }
         }
-        return $configurationComplete;
+
+        return $hostConfigured;
     }
 
     /**
@@ -275,7 +488,7 @@ class DatabaseConnect extends AbstractStepAction
      *
      * @return void
      */
-    protected function useDefaultValuesForNotConfiguredOptions()
+    protected function useDefaultMySQLValuesForNotConfiguredOptions()
     {
         $localConfigurationPathValuePairs = [];
 
@@ -300,11 +513,9 @@ class DatabaseConnect extends AbstractStepAction
         if (!isset($localConfigurationPathValuePairs['DB/Connections/Default/unix_socket'])) {
             // Make sure a default port is set if not configured yet
             // This is independent from any host configuration
-            $port = $this->getConfiguredPort();
+            $port = $this->getConfiguredOrDefaultPort();
             if ($port > 0) {
                 $localConfigurationPathValuePairs['DB/Connections/Default/port'] = $port;
-            } else {
-                $localConfigurationPathValuePairs['DB/Connections/Default/port'] = $this->getConfiguredOrDefaultPort();
             }
         }
 
@@ -339,6 +550,17 @@ class DatabaseConnect extends AbstractStepAction
             }
         }
         return $result;
+    }
+
+    /**
+     * Returns configured driver.
+     *
+     * @return string
+     */
+    protected function getConfiguredDriver()
+    {
+        $driver = $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['driver'] ?? '';
+        return $driver;
     }
 
     /**

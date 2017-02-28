@@ -39,7 +39,11 @@ class SchemaColumnDefinitionListener
         $tableColumn = $event->getTableColumn();
         $tableColumn = array_change_key_case($tableColumn, CASE_LOWER);
 
-        $dbType = $this->getDatabaseType($tableColumn['type']);
+        if ($event->getDatabasePlatform() instanceof \Doctrine\DBAL\Platforms\OraclePlatform) {
+            $dbType = $this->getDatabaseType($tableColumn['data_type']);
+        } else {
+            $dbType = $this->getDatabaseType($tableColumn['type']);
+        }
         if ($dbType !== 'enum' && $dbType !== 'set') {
             return;
         }

@@ -174,6 +174,25 @@ class DatabaseSelect extends AbstractStepAction
         $connection = GeneralUtility::makeInstance(ConnectionPool::class)
             ->getConnectionByName(ConnectionPool::DEFAULT_CONNECTION_NAME);
         $queryBuilder = $connection->createQueryBuilder();
+
+        if ($connection->getDatabasePlatform() instanceof \Doctrine\DBAL\Platforms\OraclePlatform) {
+            $defaultDatabaseCharset = $queryBuilder->select('VALUE')
+                ->from('NLS_DATABASE_PARAMETERS')
+                ->where(
+                    $queryBuilder->expr()->eq(
+                        'PARAMETER',
+                        $queryBuilder->createNamedParameter('NLS_CHARACTERSET', \PDO::PARAM_STR)
+                    )
+                )
+                ->setMaxResults(1)
+                ->execute()
+                ->fetchColumn();
+
+            // Oracle UTF-8 is based on Unicode 3.0. AL32UTF8 has updated Unicode revisions (6.1 in Oracle 12c)
+            if ($defaultDatabaseCharset) {
+                $defaultDatabaseCharset = 'utf8';
+            }
+        } else {
         $defaultDatabaseCharset = $queryBuilder->select('DEFAULT_CHARACTER_SET_NAME')
             ->from('information_schema.SCHEMATA')
             ->where(
@@ -185,6 +204,7 @@ class DatabaseSelect extends AbstractStepAction
             ->setMaxResults(1)
             ->execute()
             ->fetchColumn();
+        }
 
         return (string)$defaultDatabaseCharset;
     }

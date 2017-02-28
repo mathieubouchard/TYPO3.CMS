@@ -16,8 +16,10 @@ namespace TYPO3\CMS\Core\Database\Schema;
  */
 
 use Doctrine\DBAL\DBALException;
+use Doctrine\DBAL\Platforms\AbstractPlatform;
 use Doctrine\DBAL\Platforms\MySqlPlatform;
 use Doctrine\DBAL\Platforms\PostgreSqlPlatform;
+use Doctrine\DBAL\Platforms\OraclePlatform;
 use Doctrine\DBAL\Schema\Column;
 use Doctrine\DBAL\Schema\ColumnDiff;
 use Doctrine\DBAL\Schema\Index;
@@ -25,6 +27,7 @@ use Doctrine\DBAL\Schema\Schema;
 use Doctrine\DBAL\Schema\SchemaConfig;
 use Doctrine\DBAL\Schema\SchemaDiff;
 use Doctrine\DBAL\Schema\Table;
+use Doctrine\DBAL\Types\StringType;
 use TYPO3\CMS\Core\Database\Connection;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
@@ -323,7 +326,7 @@ class ConnectionMigrator
             $currentTableDefinition = $tablesForConnection[$tableName];
             $tablesForConnection[$tableName] = GeneralUtility::makeInstance(
                 Table::class,
-                $tableName,
+                $table->getQuotedName($this->connection->getDatabasePlatform()),
                 array_merge($currentTableDefinition->getColumns(), $table->getColumns()),
                 array_merge($currentTableDefinition->getIndexes(), $table->getIndexes()),
                 array_merge($currentTableDefinition->getForeignKeys(), $table->getForeignKeys()),
@@ -1164,19 +1167,46 @@ class ConnectionMigrator
      */
     protected function transformTablesForDatabasePlatform(array $tables, Connection $connection): array
     {
+        $platform = $connection->getDatabasePlatform();
+        $tableNameMappings = $GLOBALS['TYPO3_CONF_VARS']['DB']['TableNameMappings'] ?: [];
+
         foreach ($tables as &$table) {
+            // Oracle has an identifier limit of 30 characters,
+            // allow the user to specify custom table names to fix it
+            if ($platform instanceof OraclePlatform
+                && array_key_exists($table->getName(), $tableNameMappings)
+            ) {
+                $tableName = $tableNameMappings[$table->getName()];
+                $quotedTableName = $connection->quoteIdentifier($tableName);
+            } else {
+                $tableName = $table->getName();
+                $quotedTableName = $table->getQuotedName($platform);
+            }
+
             $indexes = [];
             foreach ($table->getIndexes() as $key => $index) {
                 $indexName = $index->getName();
-                // PostgreSQL requires index names to be unique per database/schema.
-                if ($connection->getDatabasePlatform() instanceof PostgreSqlPlatform) {
-                    $indexName = $indexName . '_' . hash('crc32b', $table->getName() . '_' . $indexName);
+                // PostgreSQL and Oracle requires index names to be unique per database/schema.
+                if ($platform instanceof PostgreSqlPlatform
+                    || $platform instanceof OraclePlatform
+                ) {
+                    $indexName = $indexName . '_' . hash('crc32b', $tableName . '_' . $indexName);
+                }
+
+                // Oracle has an identifier limit of 30 characters, reduce the size of indexes that
+                // have a long identifier.
+                //
+                // For now, this only affects uid_foreign_tablefield_<crc32b> (length = 31)
+                if ($platform instanceof OraclePlatform
+                    && mb_strlen($indexName) > 30
+                ) {
+                    $indexName = mb_substr($indexName, 0, 30);
                 }
 
                 // Remove the length information from column names for indexes if required.
                 $cleanedColumnNames = array_map(
                     function (string $columnName) use ($connection) {
-                        if ($connection->getDatabasePlatform() instanceof MySqlPlatform) {
+                        if ($platform instanceof MySqlPlatform) {
                             // Returning the unquoted, unmodified version of the column name since
                             // it can include the length information for BLOB/TEXT columns which
                             // may not be quoted.
@@ -1199,10 +1229,32 @@ class ConnectionMigrator
                 );
             }
 
+            $columns = [];
+            foreach ($table->getColumns() as $key => $column) {
+                // Oracle doesn't respect the SQL standard for VARCHAR and VARCHAR2 types.
+                // The empty string in a VARCHAR2 column is transformed to NULL.
+                // A column defined as VARCHAR2 NOT NULL DEFAULT '' doesn't make sense and
+                // the NOT NULL option must be removed
+                if ($platform instanceof OraclePlatform
+                    && $column->getType() instanceof StringType
+                    && $column->getNotNull()
+                    && $column->getDefault() === ''
+                ) {
+                    $column->setNotNull(false);
+                }
+
+                $columns[$key] = GeneralUtility::makeInstance(
+                    Column::class,
+                    $column->getQuotedName($connection->getDatabasePlatform()),
+                    $column->getType(),
+                    $column->toArray()
+                );
+            }
+
             $table = GeneralUtility::makeInstance(
                 Table::class,
-                $table->getQuotedName($connection->getDatabasePlatform()),
-                $table->getColumns(),
+                $quotedTableName,
+                $columns,
                 $indexes,
                 $table->getForeignKeys(),
                 0,

@@ -1,10 +1,22 @@
 <p>&nbsp;</p>
 <div class="row">
-	<div class="col-md-6">
+	<div class="col-md-7">
 		<form method="post" class="form-horizontal">
 			<f:render partial="Action/Common/HiddenFormFields" arguments="{_all}" />
 			<input type="hidden" value="execute" name="install[set]" />
 
+			<f:if condition="{renderConnectDetailsDriver}">
+				<div class="form-group">
+					<label for="t3-install-step-driver" class="control-label col-md-2">Driver</label>
+					<div class="col-md-10">
+						<select id="t3-install-step-driver" name="install[values][driver]" class="form-control">
+						<f:for each="{drivers}" as="curDriver">
+							<option value="{curDriver.extension}" {f:if(condition:'{driver} == {curDriver.extension}',then:'selected="selected"')}>{curDriver.label}</option>
+						</f:for>
+						</select>
+					</div>
+				</div>
+			</f:if>
 			<f:if condition="{renderConnectDetailsUsername}">
 				<div class="form-group">
 					<label for="t3-install-step-username" class="control-label col-md-2">Username</label>
@@ -21,7 +33,7 @@
 					</div>
 				</div>
 			</f:if>
-			<f:if condition="{renderConnectDetailsHost}">
+			<f:if condition="{renderConnectDetailsSelectMySQLType}">
 				<div class="form-group">
 					<label for="t3-install-step-type" class="control-label col-md-2">Type</label>
 					<div class="col-md-10">
@@ -31,6 +43,21 @@
 						</select>
 					</div>
 				</div>
+			</f:if>
+			<f:if condition="{renderConnectDetailsSelectOracleType}">
+				<div class="form-group">
+					<label for="t3-install-step-oracle-type" class="control-label col-md-2">Type</label>
+					<div class="col-md-10">
+						<select id="t3-install-step-oracle-type" name="install[values][oracletype]" class="form-control">
+							<option value="netservicename">Net Service Name</option>
+							<option value="sid" {f:if(condition:'{oracletype} == \'sid\'',then:'selected="selected"')}>SID</option>
+							<option value="servicename" {f:if(condition:'{oracletype} == \'servicename\'',then:'selected="selected"')}>Service Name</option>
+							<option value="easyconnect" {f:if(condition:'{oracletype} == \'easyconnect\'',then:'selected="selected"')}>Easy Connect</option>
+						</select>
+					</div>
+				</div>
+			</f:if>
+			<f:if condition="{renderConnectDetailsHost}">
 				<div class="form-group">
 					<label for="t3-install-step-host" class="control-label col-md-2">Host</label>
 					<div class="col-md-10">
@@ -51,6 +78,46 @@
 					<label for="t3-install-step-socket" class="control-label col-md-2">Socket</label>
 					<div class="col-md-10">
 						<input id="t3-install-step-socket" class="t3-install-form-input-text form-control" type="text" value="{socket}" name="install[values][socket]" placeholder="Default socket or enter name" />
+					</div>
+				</div>
+			</f:if>
+			<f:if condition="{renderConnectDetailsNetServiceName}">
+				<div class="form-group">
+					<label for="t3-install-step-netservicename" class="control-label col-md-2">Net Service Name</label>
+					<div class="col-md-10">
+						<input id="t3-install-step-netservicename" class="t3-install-form-input-text form-control" type="text" value="{netservicename}" name="install[values][netservicename]" placeholder="Net Service Name (from tnsnames.ora)" />
+					</div>
+				</div>
+			</f:if>
+			<f:if condition="{renderConnectDetailsServiceName}">
+				<div class="form-group">
+					<label for="t3-install-step-servicename" class="control-label col-md-2">SID or Service Name</label>
+					<div class="col-md-10">
+						<input id="t3-install-step-servicename" class="t3-install-form-input-text form-control" type="text" value="{servicename}" name="install[values][servicename]" placeholder="Optional name by which clients can connect to the database instance" />
+					</div>
+				</div>
+			</f:if>
+			<f:if condition="{renderConnectDetailsPooled}">
+				<div class="form-group">
+					<label for="t3-install-step-pooled" class="control-label col-md-2">Pooled</label>
+					<div class="col-md-10">
+						<input id="t3-install-step-pooled" type="checkbox" {f:if(condition:'{pooled}',then:'checked="checked"')} name="install[values][pooled]" />
+					</div>
+				</div>
+			</f:if>
+			<f:if condition="{renderConnectDetailsEasyConnectString}">
+				<div class="form-group">
+					<label for="t3-install-step-connectstring" class="control-label col-md-2">Easy Connect String</label>
+					<div class="col-md-10">
+						<input id="t3-install-step-connectstring" class="t3-install-form-input-text form-control" type="text" value="{connectstring}" name="install[values][connectstring]" placeholder="Complete Easy Connect connection descriptor" />
+					</div>
+				</div>
+			</f:if>
+			<f:if condition="{renderConnectDetailsPersistent}">
+				<div class="form-group">
+					<label for="t3-install-step-persistent" class="control-label col-md-2">Persistent</label>
+					<div class="col-md-10">
+						<input id="t3-install-step-persistent" type="checkbox" {f:if(condition:'{persistent}',then:'checked="checked"')} name="install[values][persistent]" />
 					</div>
 				</div>
 			</f:if>

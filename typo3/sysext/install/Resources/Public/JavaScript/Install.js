@@ -759,27 +759,131 @@ $(function() {
 		}
 	});
 
-	// Install step database settings
-	$('#t3-install-step-type').change(function() {
-		var connectionType = $(this).val(),
+	// Install step database settings Driver type
+	$('#t3-install-step-driver').change(function() {
+		var driver = $(this).val(),
+			persistentField = $('#t3-install-step-persistent');
+
+		// Hide everything
+		$(this).parents('.form-horizontal').children('.form-group').fadeOut();
+		// Show common fields
+		$('#t3-install-step-driver').parents('.form-group').fadeIn();
+
+		if (driver == 'mysqli') {
+			// Show default MySQL specific fields
+			var usernameField = $('#t3-install-step-username'),
+				passwordField = $('#t3-install-step-password'),
+				selectMySQLTypeField = $('#t3-install-step-type'),
 			hostField = $('#t3-install-step-host'),
+				portField = $('#t3-install-step-port');
+
+			usernameField.parents('.form-group').fadeIn();
+			passwordField.parents('.form-group').fadeIn();
+			selectMySQLTypeField.parents('.form-group').fadeIn();
+			persistentField.prop('checked', false);
+
+			resetSelectMySQLType($('#t3-install-step-type').val());
+		} else if (driver == 'oci8') {
+			// Show default Oracle fields
+			var usernameField = $('#t3-install-step-username'),
+				passwordField = $('#t3-install-step-password'),
+				selectOracleTypeField = $('#t3-install-step-oracle-type'),
+				netServiceNameField = $('#t3-install-step-netservicename'),
+				serviceNameField = $('#t3-install-step-servicename');
+
+			usernameField.parents('.form-group').fadeIn();
+			passwordField.parents('.form-group').fadeIn();
+			selectOracleTypeField.parents('.form-group').fadeIn();
+			persistentField.parents('.form-group').fadeIn();
+
+			resetSelectOracleType($('#t3-install-step-oracle-type').val());
+		}
+	}).trigger('change');
+
+	// Install step database settings MySQL connection type (TCP/IP or Socket)
+	$('#t3-install-step-type').change(function() {
+		if ($('#t3-install-step-driver').val() != 'mysqli') {
+			return;
+		}
+		resetSelectMySQLType($(this).val());
+	});
+	function resetSelectMySQLType(connectionType) {
+		var hostField = $('#t3-install-step-host'),
 			portField = $('#t3-install-step-port'),
 			socketField = $('#t3-install-step-socket');
 
 		if (connectionType === 'socket') {
 			hostField.parents('.form-group').fadeOut();
-			hostField.val('localhost');
+			hostField.val('');
 			portField.parents('.form-group').fadeOut();
+			portField.val('');
 			socketField.parents('.form-group').fadeIn();
 		} else {
 			hostField.parents('.form-group').fadeIn();
-			if (hostField.val() === 'localhost') {
+			if (hostField.val() === '' || hostField.val() === 'localhost') {
 				hostField.val('127.0.0.1');
 			}
 			portField.parents('.form-group').fadeIn();
+			if (portField.val() === '') {
+				portField.val('3306');
+			}
 			socketField.parents('.form-group').fadeOut();
 		}
-	}).trigger('change');
+	}
+
+	// Install step database settings Oracle connection type (Net Service Name, SID, Service Name or Easy Connect)
+	$('#t3-install-step-oracle-type').change(function() {
+		if ($('#t3-install-step-driver').val() != 'oci8') {
+			return;
+		}
+		resetSelectOracleType($(this).val());
+	});
+	function resetSelectOracleType(connectionType) {
+		var hostField = $('#t3-install-step-host'),
+			portField = $('#t3-install-step-port'),
+			pooledField = $('#t3-install-step-pooled'),
+			netServiceNameField = $('#t3-install-step-netservicename'),
+			serviceNameField = $('#t3-install-step-servicename'),
+			connectStringField = $('#t3-install-step-connectstring');
+
+		// Oracle Net Service Name (tnsnames.ora)
+		if (connectionType === 'netservicename') {
+			hostField.parents('.form-group').fadeOut();
+			hostField.val('');
+			portField.parents('.form-group').fadeOut();
+			portField.val('');
+			netServiceNameField.parents('.form-group').fadeIn();
+			serviceNameField.parents('.form-group').fadeOut();
+			serviceNameField.val('');
+			pooledField.parents('.form-group').fadeOut();
+			pooledField.prop('checked', false);
+			connectStringField.parents('.form-group').fadeOut();
+			connectStringField.val('');
+		// Oracle SID or Service Name
+		} else if (connectionType === 'sid' || connectionType === 'servicename') {
+			hostField.parents('.form-group').fadeIn();
+			portField.parents('.form-group').fadeIn();
+			netServiceNameField.parents('.form-group').fadeOut();
+			netServiceNameField.val('')
+			pooledField.parents('.form-group').fadeIn();
+			serviceNameField.parents('.form-group').fadeIn();
+			connectStringField.parents('.form-group').fadeOut();
+			connectStringField.val('');
+		// Easy connect string
+		} else {
+			hostField.parents('.form-group').fadeOut();
+			hostField.val('');
+			portField.parents('.form-group').fadeOut();
+			portField.val('');
+			pooledField.parents('.form-group').fadeOut();
+			pooledField.prop('checked', false);
+			netServiceNameField.parents('.form-group').fadeOut();
+			netServiceNameField.val('')
+			serviceNameField.parents('.form-group').fadeOut();
+			serviceNameField.val('');
+			connectStringField.parents('.form-group').fadeIn();
+		}
+	}
 
 	// Extension compatibility check
 	var $container = $('#checkExtensions');

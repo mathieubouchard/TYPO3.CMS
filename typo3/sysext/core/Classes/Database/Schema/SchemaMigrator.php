@@ -19,6 +19,7 @@ use Doctrine\DBAL\DBALException;
 use Doctrine\DBAL\Schema\Schema;
 use Doctrine\DBAL\Schema\SchemaDiff;
 use Doctrine\DBAL\Schema\Table;
+use Doctrine\DBAL\Platforms\OraclePlatform;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Database\Schema\Exception\StatementException;
 use TYPO3\CMS\Core\Database\Schema\Parser\Parser;
@@ -204,11 +205,39 @@ class SchemaMigrator
         foreach ($statements as $statement) {
             // Only handle insert statements and extract the table at the same time. Extracting
             // the table name is required to perform the inserts on the right connection.
-            if (preg_match('/^INSERT\s+INTO\s+`?(\w+)`?(.*)/i', $statement, $matches)) {
-                list(, $tableName, $sqlFragment) = $matches;
+            if (preg_match('/^INSERT\s+INTO\s+`?(\w+)`?\s+\((.+)\)\s+VALUES\s+(.*)/i', $statement, $matches)) {
+                list(, $tableName, $columns, $sqlFragment) = $matches;
+
+                $connection = $connectionPool->getConnectionForTable($tableName);
+
+                // Oracle has an identifier limit of 30 characters, allow the user to specify
+                // custom table names to fix it
+                // @todo: duplicate code from ConnectionMigrator
+                if ($connection->getDatabasePlatform() instanceof OraclePlatform) {
+                    $tableNameMappings = $GLOBALS['TYPO3_CONF_VARS']['DB']['TableNameMappings'] ?: [];
+                    if (array_key_exists($tableName, $tableNameMappings)) {
+                        $tableName = $tableNameMappings[$tableName];
+                    }
+                }
+
+                // The tables are created with quoted identifiers, so we must also insert data
+                // using quoted identifiers. Some SGBD (ex: Oracle) will automatically transform
+                // unquoted identifiers (ex: Oracle transform identifiers to UPPERCASE)
+                $columnNames = [];
+                foreach (explode(',', $columns) as $columnName) {
+                    $columnName = trim($columnName);
+                    if (strlen($columnName) > 0
+                        && $columnName[0] !== $connection->getDatabasePlatform()->getIdentifierQuoteCharacter()
+                    ) {
+                        $columnName = $connection->quoteIdentifier($columnName);
+                    }
+                    array_push($columnNames, $columnName);
+                }
+
                 $insertStatements[$tableName][] = sprintf(
-                    'INSERT INTO %s %s',
-                    $connectionPool->getConnectionForTable($tableName)->quoteIdentifier($tableName),
+                    'INSERT INTO %s (%s) VALUES %s',
+                    $connection->quoteIdentifier($tableName),
+                    implode(', ', $columnNames),
                     rtrim($sqlFragment, ';')
                 );
             }
